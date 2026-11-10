@@ -301,9 +301,11 @@ static u8 *GetVectorAddress(P, size_t n) {
   } else {
     v = ComputeAddress(A);
     SetReadAddr(m, v, n);
-    if ((v & (n - 1)) || !(p = LookupAddress(m, v))) {
-      ThrowSegmentationFault(m, v);
-    }
+    // a misaligned movaps and its kin are #GP(0), not a page fault: an
+    // embedder that answers faults by paging in the address would restart
+    // the instruction forever
+    if (v & (n - 1)) ThrowProtectionFault(m);
+    if (!(p = LookupAddress(m, v))) ThrowSegmentationFault(m, v);
   }
   return p;
 }
