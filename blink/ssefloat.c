@@ -582,7 +582,7 @@ void OpMaxpsd(P) {
 }
 
 static int Cmps(int imm, float x, float y) {
-  switch (imm) {
+  switch (imm & 7) {
     case 0:
       return x == y ? -1 : 0;
     case 1:
@@ -605,7 +605,7 @@ static int Cmps(int imm, float x, float y) {
 }
 
 static i32 Cmpd(int imm, double x, double y) {
-  switch (imm) {
+  switch (imm & 7) {
     case 0:
       return x == y ? -1 : 0;
     case 1:
@@ -627,6 +627,9 @@ static i32 Cmpd(int imm, double x, double y) {
   }
 }
 
+// Each lane of the result is a mask, all ones or all zeros, which code reads
+// with movq and a test of its low bit: it goes in by the lane's bits, not
+// converted to the lane's float, which would make true -1.0.
 void OpCmppsd(P) {
   IGNORE_RACES_START();
   int imm = uimm0;
@@ -634,13 +637,13 @@ void OpCmppsd(P) {
     union DoublePun x, y;
     y.i = Read64(GetModrmRegisterXmmPointerRead8(A));
     x.i = Read64(XmmRexrReg(m, rde));
-    x.f = Cmpd(imm, x.f, y.f);
+    x.i = (i64)Cmpd(imm, x.f, y.f);
     Write64(XmmRexrReg(m, rde), x.i);
   } else if (Rep(rde) == 3) {
     union FloatPun x, y;
     y.i = Read32(GetModrmRegisterXmmPointerRead4(A));
     x.i = Read32(XmmRexrReg(m, rde));
-    x.f = Cmps(imm, x.f, y.f);
+    x.i = Cmps(imm, x.f, y.f);
     Write32(XmmRexrReg(m, rde), x.i);
   } else if (Osz(rde)) {
     u8 *p;
@@ -651,8 +654,8 @@ void OpCmppsd(P) {
     p = XmmRexrReg(m, rde);
     x[0].i = Read64(p + 0 * 8);
     x[1].i = Read64(p + 1 * 8);
-    x[0].f = Cmpd(imm, x[0].f, y[0].f);
-    x[1].f = Cmpd(imm, x[1].f, y[1].f);
+    x[0].i = (i64)Cmpd(imm, x[0].f, y[0].f);
+    x[1].i = (i64)Cmpd(imm, x[1].f, y[1].f);
     Write64(p + 0 * 8, x[0].i);
     Write64(p + 1 * 8, x[1].i);
   } else {
@@ -668,10 +671,10 @@ void OpCmppsd(P) {
     x[1].i = Read32(p + 1 * 4);
     x[2].i = Read32(p + 2 * 4);
     x[3].i = Read32(p + 3 * 4);
-    x[0].f = Cmps(imm, x[0].f, y[0].f);
-    x[1].f = Cmps(imm, x[1].f, y[1].f);
-    x[2].f = Cmps(imm, x[2].f, y[2].f);
-    x[3].f = Cmps(imm, x[3].f, y[3].f);
+    x[0].i = Cmps(imm, x[0].f, y[0].f);
+    x[1].i = Cmps(imm, x[1].f, y[1].f);
+    x[2].i = Cmps(imm, x[2].f, y[2].f);
+    x[3].i = Cmps(imm, x[3].f, y[3].f);
     Write32(p + 0 * 4, x[0].i);
     Write32(p + 1 * 4, x[1].i);
     Write32(p + 2 * 4, x[2].i);
