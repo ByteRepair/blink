@@ -593,10 +593,10 @@ static int Cmps(int imm, float x, float y) {
       return isnan(x) || isnan(y) ? -1 : 0;
     case 4:
       return x != y ? -1 : 0;
-    case 5:
-      return x >= y ? -1 : 0;
-    case 6:
-      return x > y ? -1 : 0;
+    case 5:  // not less than, so true of a NaN
+      return !(x < y) ? -1 : 0;
+    case 6:  // not less than or equal
+      return !(x <= y) ? -1 : 0;
     case 7:
       return !(isnan(x) || isnan(y)) ? -1 : 0;
     default:
@@ -616,10 +616,10 @@ static i32 Cmpd(int imm, double x, double y) {
       return isnan(x) || isnan(y) ? -1 : 0;
     case 4:
       return x != y ? -1 : 0;
-    case 5:
-      return x >= y ? -1 : 0;
-    case 6:
-      return x > y ? -1 : 0;
+    case 5:  // not less than, so true of a NaN
+      return !(x < y) ? -1 : 0;
+    case 6:  // not less than or equal
+      return !(x <= y) ? -1 : 0;
     case 7:
       return !(isnan(x) || isnan(y)) ? -1 : 0;
     default:

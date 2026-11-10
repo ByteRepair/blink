@@ -1043,6 +1043,7 @@ static u64 AluPopcnt(u64 x, struct Machine *m) {
   m->flags = SetFlag(m->flags, FLAGS_SF, false);
   m->flags = SetFlag(m->flags, FLAGS_OF, false);
   m->flags = SetFlag(m->flags, FLAGS_PF, false);
+  m->flags = SetFlag(m->flags, FLAGS_AF, false);
   return popcount(x);
 }
 
