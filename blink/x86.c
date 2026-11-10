@@ -401,9 +401,28 @@ static void xed_set_vex_prefix(struct XedDecodedInst *x, unsigned prefix) {
   }
 }
 
+// The VEX-encoded instructions there is code for: BMI2's, which work in the
+// general registers. The CPU advertises no AVX, so every other VEX encoding
+// is undefined, rather than run as the legacy instruction of the same
+// opcode with the extra operand and the vector length ignored.
+static bool xed_vex_is_implemented(int mopcode) {
+  switch (mopcode) {
+    case 0x2f5:  // bzhi, pdep, pext
+    case 0x2f6:  // mulx
+    case 0x2f7:  // shlx, sarx, shrx
+    case 0x3f0:  // rorx
+      return true;
+    default:
+      return false;
+  }
+}
+
 static int xed_vex_opcode_scanner(struct XedDecodedInst *x, int map) {
   xed_set_mopcode(x, map << 8 | x->bytes[x->length]);
   x->op.pos_opcode = x->length++;
+  if (!xed_vex_is_implemented(map << 8 | x->bytes[x->op.pos_opcode])) {
+    return XED_ERROR_INVALID_FOR_CHIP;
+  }
 #ifndef TINY
   if (Mode(x->op.rde) == XED_MODE_LONG && Rex(x->op.rde)) {
     return XED_ERROR_BAD_REX_PREFIX;

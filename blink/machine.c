@@ -2085,6 +2085,10 @@ nexgen32e_f GetOp(long op) {
       XLAT(0x344, OpSsePclmulqdq);
       XLAT(0x3f0, OpRorx);
       default:
+        // every other opcode of maps 2 and 3 is SSE4's, whose tables #UD
+        // what they have no entry for
+        if ((op >> 8) == XED_ILD_MAP2) return OpSse4Map2;
+        if ((op >> 8) == XED_ILD_MAP3) return OpSse4Map3;
         return OpUd;
     }
   }

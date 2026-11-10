@@ -648,6 +648,8 @@ void OpRet(P);
 void OpRetf(P);
 void OpRetIw(P);
 void OpSsePclmulqdq(P);
+void OpSse4Map2(P);
+void OpSse4Map3(P);
 void OpXaddEbGb(P);
 void OpXaddEvqpGvqp(P);
 void OpXchgGbEb(P);

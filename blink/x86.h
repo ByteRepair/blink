@@ -58,6 +58,7 @@ struct XedMachineMode {
 #define XED_ERROR_NONE              0
 #define XED_ERROR_BUFFER_TOO_SHORT  1
 #define XED_ERROR_GENERAL_ERROR     2
+#define XED_ERROR_INVALID_FOR_CHIP  3
 #define XED_ERROR_BAD_LEGACY_PREFIX 7
 #define XED_ERROR_BAD_REX_PREFIX    8
 #define XED_ERROR_BAD_MAP           10
