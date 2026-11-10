@@ -77,6 +77,7 @@ u8 *GetModrmRegisterWordPointerWrite4(P);
 u8 *GetModrmRegisterWordPointerWrite8(P);
 u8 *GetModrmRegisterWordPointerWriteOsz(P);
 u8 *GetModrmRegisterWordPointerWriteOszRexw(P);
+u8 *GetModrmRegisterXmmPointerRead(P, size_t);
 u8 *GetModrmRegisterXmmPointerRead16(P);
 u8 *GetModrmRegisterXmmPointerRead4(P);
 u8 *GetModrmRegisterXmmPointerRead8(P);
@@ -84,6 +85,7 @@ u8 *GetModrmRegisterXmmPointerWrite16(P);
 u8 *GetModrmRegisterXmmPointerWrite4(P);
 u8 *GetModrmRegisterXmmPointerWrite8(P);
 u8 *GetXmmAddress(P) returnsaligned((16));
+u8 *GetXmmAddressWrite(P) returnsaligned((16));
 u8 *GetMmxAddress(P) returnsaligned((8));
 
 #endif /* BLINK_MODRM_H_ */

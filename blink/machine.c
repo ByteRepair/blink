@@ -240,7 +240,7 @@ static void OpXchgZvqp(P) {
 static void OpCmpxchg8b(P) {
   uint8_t *p;
   uint32_t d, a;
-  p = GetModrmRegisterXmmPointerRead8(A);
+  p = GetModrmRegisterXmmPointerWrite8(A);
   if (Lock(rde)) LockBus(p);
   a = Read32(p + 0);
   d = Read32(p + 4);
@@ -259,7 +259,7 @@ static void OpCmpxchg8b(P) {
 static void OpCmpxchg16b(P) {
   uint8_t *p;
   uint64_t d, a;
-  p = GetModrmRegisterXmmPointerRead16(A);
+  p = GetModrmRegisterXmmPointerWrite16(A);
   if (Lock(rde)) LockBus(p);
   a = Read64(p + 0);
   d = Read64(p + 8);
@@ -350,7 +350,7 @@ static void OpMovAlOb(P) {
 static void OpMovObAl(P) {
   i64 addr = AddressOb(A);
   SetReadAddr(m, addr, 1);
-  Store8(ResolveAddress(m, addr), Get8(m->ax));
+  Store8(ResolveAddressWrite(m, addr), Get8(m->ax));
 }
 
 static void OpMovRaxOvqp(P) {
@@ -362,7 +362,7 @@ static void OpMovRaxOvqp(P) {
 static void OpMovOvqpRax(P) {
   i64 v = DataSegment(A, disp);
   SetWriteAddr(m, v, 1 << RegLog2(rde));
-  WriteMemory(rde, ResolveAddress(m, v), Get64(m->ax));
+  WriteMemory(rde, ResolveAddressWrite(m, v), Get64(m->ax));
 }
 
 static void OpMovEbGb(P) {
@@ -1043,14 +1043,20 @@ static u64 AluPopcnt(u64 x, struct Machine *m) {
   m->flags = SetFlag(m->flags, FLAGS_SF, false);
   m->flags = SetFlag(m->flags, FLAGS_OF, false);
   m->flags = SetFlag(m->flags, FLAGS_PF, false);
+  m->flags = SetFlag(m->flags, FLAGS_AF, false);
   return popcount(x);
 }
 
-static u64 AluLzcnt(u64 x, struct Machine *m, int bits) {
-  u64 r = x ? bsf(x) : bits;
+// lzcnt (F3 0F BD) counts the zeros above the highest set bit, and tzcnt
+// (F3 0F BC) those below the lowest; both give the operand's width for zero
+// and say so in CF.
+static u64 AluCount(u64 x, struct Machine *m, u64 r) {
   m->flags = SetFlag(m->flags, FLAGS_CF, !x);
   m->flags = SetFlag(m->flags, FLAGS_ZF, !r);
   return r;
+}
+static u64 AluLzcnt(u64 x, struct Machine *m, int bits) {
+  return AluCount(x, m, x ? bits - 1 - bsr(x) : bits);
 }
 static u64 AluLzcnt64(u64 x, struct Machine *m) {
   return AluLzcnt(x, m, 64);
@@ -1061,16 +1067,8 @@ static u64 AluLzcnt32(u64 x, struct Machine *m) {
 static u64 AluLzcnt16(u64 x, struct Machine *m) {
   return AluLzcnt(x, m, 16);
 }
-static u64 AluBsf(u64 x, struct Machine *m) {
-  m->flags = SetFlag(m->flags, FLAGS_ZF, !x);
-  return x ? bsf(x) : 0;
-}
-
 static u64 AluTzcnt(u64 x, struct Machine *m, int bits) {
-  u64 r = x ? bsr(x) : bits;
-  m->flags = SetFlag(m->flags, FLAGS_CF, !x);
-  m->flags = SetFlag(m->flags, FLAGS_ZF, !r);
-  return r;
+  return AluCount(x, m, x ? bsf(x) : bits);
 }
 static u64 AluTzcnt64(u64 x, struct Machine *m) {
   return AluTzcnt(x, m, 64);
@@ -1081,9 +1079,23 @@ static u64 AluTzcnt32(u64 x, struct Machine *m) {
 static u64 AluTzcnt16(u64 x, struct Machine *m) {
   return AluTzcnt(x, m, 16);
 }
-static u64 AluBsr(u64 x, struct Machine *m) {
+
+static u64 Bsf(u64 x) {
+  return bsf(x);
+}
+static u64 Bsr(u64 x) {
+  return bsr(x);
+}
+
+// bsf and bsr of zero set ZF and leave the destination as it was. AMD
+// documents that and Intel does it, and compilers rely on it: LLVM puts
+// the answer for zero in the destination before the scan, so writing
+// anything there makes u64::leading_zeros(0) wrong. There is no template
+// for a write that may not happen, so a path calls this op whole.
+static void BitscanOrKeep(P, u64 scan(u64)) {
+  u64 x = ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A));
   m->flags = SetFlag(m->flags, FLAGS_ZF, !x);
-  return x ? bsr(x) : 0;
+  if (x) WriteRegister(rde, RegRexrReg(m, rde), scan(x));
 }
 
 static void Bitscan(P, u64 op(u64, struct Machine *)) {
@@ -1103,32 +1115,32 @@ static void Bitscan(P, u64 op(u64, struct Machine *)) {
 
 static void OpBsf(P) {
   u64 (*op)(u64, struct Machine *);
-  if (Rep(rde) == 3) {
-    if (Rexw(rde)) {
-      op = AluLzcnt64;
-    } else if (!Osz(rde)) {
-      op = AluLzcnt32;
-    } else {
-      op = AluLzcnt16;
-    }
+  if (Rep(rde) != 3) {
+    BitscanOrKeep(A, Bsf);
+    return;
+  }
+  if (Rexw(rde)) {
+    op = AluTzcnt64;
+  } else if (!Osz(rde)) {
+    op = AluTzcnt32;
   } else {
-    op = AluBsf;
+    op = AluTzcnt16;
   }
   Bitscan(A, op);
 }
 
 static void OpBsr(P) {
   u64 (*op)(u64, struct Machine *);
-  if (Rep(rde) == 3) {
-    if (Rexw(rde)) {
-      op = AluTzcnt64;
-    } else if (!Osz(rde)) {
-      op = AluTzcnt32;
-    } else {
-      op = AluTzcnt16;
-    }
+  if (Rep(rde) != 3) {
+    BitscanOrKeep(A, Bsr);
+    return;
+  }
+  if (Rexw(rde)) {
+    op = AluLzcnt64;
+  } else if (!Osz(rde)) {
+    op = AluLzcnt32;
   } else {
-    op = AluBsr;
+    op = AluLzcnt16;
   }
   Bitscan(A, op);
 }
@@ -2085,6 +2097,10 @@ nexgen32e_f GetOp(long op) {
       XLAT(0x344, OpSsePclmulqdq);
       XLAT(0x3f0, OpRorx);
       default:
+        // every other opcode of maps 2 and 3 is SSE4's, whose tables #UD
+        // what they have no entry for
+        if ((op >> 8) == XED_ILD_MAP2) return OpSse4Map2;
+        if ((op >> 8) == XED_ILD_MAP3) return OpSse4Map3;
         return OpUd;
     }
   }

@@ -68,7 +68,8 @@ static void OpCrc32(P) {
 void Op2f01(P) {
   if (!Rep(rde) && !Osz(rde)) {
     OpUdImpl(m);  // TODO: movbe
-  } else if (Rep(rde) == 2 && !Osz(rde)) {
+  } else if (Rep(rde) == 2 && (!Osz(rde) || Opcode(rde) == 0xf1)) {
+    // crc32 of a word takes the operand-size prefix with F2
     OpCrc32(A);
   } else {
     OpUdImpl(m);

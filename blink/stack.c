@@ -82,30 +82,34 @@ static u64 ReadMemWord(u8 *p, u32 osz) {
 
 static void PushN(P, u64 x, unsigned mode, unsigned osz) {
   u8 *w;
-  u64 v;
+  u64 v, sp;
   u8 b[8];
   void *p[2];
   switch (mode) {
     case XED_MODE_REAL:
-      v = (Get32(m->sp) - osz) & 0xffff;
-      Put16(m->sp, v);
-      v += m->ss.base;
+      sp = (Get32(m->sp) - osz) & 0xffff;
+      v = sp + m->ss.base;
       break;
     case XED_MODE_LEGACY:
-      v = (Get32(m->sp) - osz) & 0xffffffff;
-      Put64(m->sp, v);
-      v += m->ss.base;
+      sp = (Get32(m->sp) - osz) & 0xffffffff;
+      v = sp + m->ss.base;
       break;
     case XED_MODE_LONG:
-      v = (Get64(m->sp) - osz) & 0xffffffffffffffff;
-      Put64(m->sp, v);
+      sp = v = (Get64(m->sp) - osz) & 0xffffffffffffffff;
       break;
     default:
       __builtin_unreachable();
   }
+  // the stack pointer moves only once the store has landed, so a fault
+  // leaves the push to be run again rather than half done
   w = AccessRam(m, v, osz, p, b, false);
   WriteStackWord(w, rde, osz, x);
   EndStore(m, v, osz, p, b);
+  if (mode == XED_MODE_REAL) {
+    Put16(m->sp, sp);
+  } else {
+    Put64(m->sp, sp);
+  }
 }
 
 void Push(P, u64 x) {

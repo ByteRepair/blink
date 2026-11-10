@@ -221,7 +221,7 @@ static void RepMovsbEnhanced(P) {
       IGNORE_RACES_START();
       atomic_thread_fence(memory_order_acquire);
       do {
-        direal = ResolveAddress(m, diactual);
+        direal = ResolveAddressWrite(m, diactual);
         sireal = ResolveAddress(m, siactual);
         dilow = Get16(m->di);
         silow = Get16(m->si);
@@ -274,7 +274,7 @@ static void RepStosbEnhanced(P) {
     SetWriteAddr(m, diactual, cx);
     IGNORE_RACES_START();
     do {
-      direal = ResolveAddress(m, diactual);
+      direal = ResolveAddressWrite(m, diactual);
       dilow = Get16(m->di);
       diremain = 4096 - (diactual & 4095);
       diremain = MIN(diremain, 65536 - dilow);

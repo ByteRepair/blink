@@ -102,7 +102,7 @@ static void MovdqaVdqWdq(P) {
 static void MovdqaWdqVdq(P) {
   u8 *dst;
   IGNORE_RACES_START();
-  dst = GetXmmAddress(A);
+  dst = GetXmmAddressWrite(A);
   if (!IsRomAddress(m, dst)) {
     memcpy(dst, XmmRexrReg(m, rde), 16);
   }

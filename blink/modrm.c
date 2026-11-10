@@ -253,7 +253,7 @@ u8 *GetModrmRegisterWordPointerWriteOsz(P) {
   }
 }
 
-static u8 *GetModrmRegisterXmmPointerRead(P, size_t n) {
+u8 *GetModrmRegisterXmmPointerRead(P, size_t n) {
   if (IsModrmRegister(rde)) {
     return XmmRexbRm(m, rde);
   } else {
@@ -293,27 +293,37 @@ u8 *GetModrmRegisterXmmPointerWrite16(P) {
   return GetModrmRegisterXmmPointerWrite(A, 16);
 }
 
-static u8 *GetVectorAddress(P, size_t n) {
+static u8 *GetVectorAddress(P, size_t n, bool write) {
   u8 *p;
   i64 v;
   if (IsModrmRegister(rde)) {
     p = XmmRexbRm(m, rde);
   } else {
     v = ComputeAddress(A);
-    SetReadAddr(m, v, n);
-    if ((v & (n - 1)) || !(p = LookupAddress(m, v))) {
-      ThrowSegmentationFault(m, v);
+    if (write) {
+      SetWriteAddr(m, v, n);
+    } else {
+      SetReadAddr(m, v, n);
     }
+    // a misaligned movaps and its kin are #GP(0), not a page fault: an
+    // embedder that answers faults by paging in the address would restart
+    // the instruction forever
+    if (v & (n - 1)) ThrowProtectionFault(m);
+    p = write ? ResolveAddressWrite(m, v) : ResolveAddress(m, v);
   }
   return p;
 }
 
 u8 *GetMmxAddress(P) {
-  return GetVectorAddress(A, 8);
+  return GetVectorAddress(A, 8, false);
 }
 
 u8 *GetXmmAddress(P) {
-  return GetVectorAddress(A, 16);
+  return GetVectorAddress(A, 16, false);
+}
+
+u8 *GetXmmAddressWrite(P) {
+  return GetVectorAddress(A, 16, true);
 }
 
 u8 *GetModrmReadBW(P) {

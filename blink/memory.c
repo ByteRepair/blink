@@ -260,6 +260,10 @@ MapError:
   return (uintptr_t)efault0();
 }
 
+#ifndef BLINK_EXTERNAL_MMU
+// An embedder that keeps its own page tables defines BLINK_EXTERNAL_MMU and
+// LookupAddress2 itself: every guest access in non-linear mode resolves
+// through it, with need & PAGE_RW set for a write.
 u8 *LookupAddress2(struct Machine *m, i64 virt, u64 mask, u64 need) {
   u8 *host;
   u64 entry;
@@ -294,6 +298,7 @@ u8 *LookupAddress2(struct Machine *m, i64 virt, u64 mask, u64 need) {
     return (u8 *)efault0();
   }
 }
+#endif
 
 u8 *LookupAddress(struct Machine *m, i64 virt) {
   u64 need = 0;
@@ -329,6 +334,22 @@ u8 *SpyAddress(struct Machine *m, i64 virt) {
 u8 *ResolveAddress(struct Machine *m, i64 v) {
   u8 *r;
   if ((r = GetAddress(m, v))) return r;
+  ThrowSegmentationFault(m, v);
+}
+
+/**
+ * Translates a virtual address that is about to be written.
+ *
+ * Asks for write permission, which ResolveAddress does not: a page that
+ * is readable but not writable (read-only, or shared copy-on-write with
+ * another process) must fault here rather than be written in place.
+ */
+u8 *ResolveAddressWrite(struct Machine *m, i64 v) {
+  u8 *r;
+  u64 need = PAGE_RW;
+  if (HasLinearMapping()) return ToHost(v);
+  if (Cpl(m) == 3) need |= PAGE_U;
+  if ((r = LookupAddress2(m, v, need, need))) return r;
   ThrowSegmentationFault(m, v);
 }
 
@@ -478,13 +499,18 @@ u8 *ReserveAddress(struct Machine *m, i64 v, size_t n, bool writable) {
   }
 }
 
+// A copy reads the page; a reference handed back is written through.
+static u8 *ResolveFor(struct Machine *m, i64 v, bool copy) {
+  return copy ? ResolveAddress(m, v) : ResolveAddressWrite(m, v);
+}
+
 static u8 *AccessRam2(struct Machine *m, i64 v, size_t n, void *p[2], u8 *tmp,
                       bool copy, bool protect_rom) {
   u8 *a, *b;
   unsigned k;
   unassert(n <= 4096);
   if ((v & 4095) + n <= 4096) {
-    a = ResolveAddress(m, v);
+    a = ResolveFor(m, v, copy);
     if (!protect_rom || !IsRomAddress(m, a)) return a;
     if (copy) memcpy(tmp, a, n);
     return tmp;
@@ -493,8 +519,8 @@ static u8 *AccessRam2(struct Machine *m, i64 v, size_t n, void *p[2], u8 *tmp,
   k = 4096;
   k -= v & 4095;
   unassert(k <= 4096);
-  a = ResolveAddress(m, v);
-  b = ResolveAddress(m, v + k);
+  a = ResolveFor(m, v, copy);
+  b = ResolveFor(m, v + k, copy);
   if (copy) {
     memcpy(tmp, a, k);
     memcpy(tmp + k, b, n - k);
